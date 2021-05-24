@@ -52,7 +52,7 @@ class Render:
             elif y0 > y2:
                 return v0, v2, v1
             else:
-                return v2, v0, 1
+                return v2, v0, v1
         else:
             if y0 > y2:
                 return v1, v0, v2
@@ -86,9 +86,11 @@ class Render:
         for i in range(yA - yC):
             fragments_hline = np.linspace(left[i], right[i], int(round(right[i, 0]) - round(left[i, 0])), endpoint = False)
             fragments_hline[:, 2] = 1.0 / fragments_hline[:, 2]
-            fragments.append(fragments_hline)
             
-        fragments = np.array(fragments)
+            if i == 0:
+                fragments = fragments_hline.copy()
+            else:
+                fragments = np.concatenate((fragments, fragments_hline), axis = 0)
         
         return fragments
     
@@ -143,14 +145,15 @@ class Render:
             
             
             # Canvas
-            vertices = []
+            nvertices = vertices_proj.shape[0]
+            vertices = np.zeros((nvertices, 6), dtype = np.float64)
             
             for i, vertex in enumerate(vertices_proj):
                 vn = to_cartesian(vertex)
                 vc = camera.to_canvas(vn)
-                vtx = np.array([vc[0], vc[1], 1 / vc[2], vertex_colors[0], vertex_colors[1], vertex_colors[2]])
-                vertices.append(vtx)
-            vertices = np.array(vertices)
+                vertices[i, :2] = vc[:2]
+                vertices[i, 2] = 1 / vc[2]
+                vertices[i, 3:] = vertex_colors[i, :3]
             
             # Fragments from the primitive (triangle)
             triangles = object.get_triangles()
@@ -161,15 +164,15 @@ class Render:
                 v2 = vertices[t[2]]
                 fragments = self.raster_triang(v0, v1, v2)
             
-            for fragment in fragments:
-                ix = int(fragment[0])
-                iy = int(fragment[1])
-                z = fragment[2]
-                color = fragment[3:]
-                
-                if z < self.z_buffer[iy, ix]:
-                    self.frame_buffer[iy, ix] = color
-                    self.z_buffer[iy, ix] = z
+                for fragment in fragments:
+                    ix = int(fragment[0])
+                    iy = int(fragment[1])
+                    z = fragment[2]
+                    color = fragment[3:]
+                    
+                    if z < self.z_buffer[iy, ix]:
+                        self.frame_buffer[iy, ix] = color
+                        self.z_buffer[iy, ix] = z
             
         return
             
